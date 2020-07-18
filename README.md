@@ -3,7 +3,7 @@ A small utility to skip integrated ads on youtube when played on chromecasts
 
 ## Usage
 Install the prerequisites:
-* go-chromecast
+* [go-chromecast](https://github.com/vishen/go-chromecast)
 * jq
 * bc
 
