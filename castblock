@@ -2,8 +2,17 @@
 
 # set -x;
 
-[ -e "/tmp/castblock-updates" ] && rm "/tmp/castblock-updates"
-mkfifo "/tmp/castblock-updates"
+[ -e "/tmp/castblock-updates" ] && rm "/tmp/castblock-updates";
+mkfifo "/tmp/castblock-updates";
+
+touch "/tmp/castblock-state";
+
+function cleanup () {
+  rm -f "/tmp/castblock-updates";
+  rm -f "/tmp/castblock-state";
+
+  exit 0;
+}
 
 function printTable()
 {
@@ -111,7 +120,7 @@ getChromecasts () {
     device=$(echo "$cast" | grep -Po "device=\"\K[^\"]*");
     device_name=$(echo "$cast" | grep -Po "device_name=\"\K[^\"]*");
     uuid=$(echo "$cast" | grep -Po "uuid=\"\K[^\"]*");
-    output=$(echo "$output" | jq ". + {\"${uuid}\": {\"device\": \"${device}\", \"device_name\": \"${device_name}\", \"playhead\": 0, \"videoid\": \"\", \"segmentsid\": \"\", \"segments\": []}}")
+    output=$(echo "$output" | jq -c ". + {\"${uuid}\": {\"device\": \"${device}\", \"device_name\": \"${device_name}\", \"playhead\": 0, \"videoid\": \"\", \"segmentsid\": \"\", \"segments\": []}}")
   done < <(printf '%s\n' "$chromecasts");
   echo "$output";
 }
@@ -214,7 +223,7 @@ skipLoop () {
       segmentsid=$(echo "$cast" | jq -r '.segmentsid');
       playhead=$(echo "$cast" | jq -r '.playhead');
       uuid=$(echo "$cast" | jq -r '.uuid');
-      if [ "$videoid" = "$segmentsid" ] && [ "$playhead" -gt 0 ]; then
+      if [ ! -z $uuid ] && [ ! -z $videoid ] && [ ! -z $segmentsid ] && [ ! -z $playhead ] && [ "$videoid" = "$segmentsid" ] && [ "$playhead" -gt 0 ]; then
         segments=$(echo "$cast" | jq -c '.segments[]');
         while read -r segment;
         do
@@ -253,6 +262,7 @@ formatTableData () {
 
 # Casts as objects
 chromecasts=$(getChromecasts);
+echo "$chromecasts" >> "/tmp/castblock-state";
 
 watchLoop "$chromecasts";
 statusLoop "$chromecasts";
@@ -261,6 +271,8 @@ sbLoop &
 skipLoop &
 
 clear;
+
+trap 'cleanup' SIGINT;
 
 while true;
 do
