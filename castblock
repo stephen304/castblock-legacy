@@ -1,0 +1,278 @@
+#!/bin/bash
+
+# set -x;
+
+[ -e "/tmp/castblock-updates" ] && rm "/tmp/castblock-updates"
+mkfifo "/tmp/castblock-updates"
+
+function printTable()
+{
+    local -r delimiter="${1}"
+    local -r data="$(removeEmptyLines "${2}")"
+
+    if [[ "${delimiter}" != '' && "$(isEmptyString "${data}")" = 'false' ]]
+    then
+        local -r numberOfLines="$(wc -l <<< "${data}")"
+
+        if [[ "${numberOfLines}" -gt '0' ]]
+        then
+            local table=''
+            local i=1
+
+            for ((i = 1; i <= "${numberOfLines}"; i = i + 1))
+            do
+                local line=''
+                line="$(sed "${i}q;d" <<< "${data}")"
+
+                local numberOfColumns='0'
+                numberOfColumns="$(awk -F "${delimiter}" '{print NF}' <<< "${line}")"
+
+                # Add Line Delimiter
+
+                if [[ "${i}" -eq '1' ]]
+                then
+                    table="${table}$(printf '%s#+' "$(repeatString '#+' "${numberOfColumns}")")"
+                fi
+
+                # Add Header Or Body
+
+                table="${table}\n"
+
+                local j=1
+
+                for ((j = 1; j <= "${numberOfColumns}"; j = j + 1))
+                do
+                    table="${table}$(printf '#| %s' "$(cut -d "${delimiter}" -f "${j}" <<< "${line}")")"
+                done
+
+                table="${table}#|\n"
+
+                # Add Line Delimiter
+
+                if [[ "${i}" -eq '1' ]] || [[ "${numberOfLines}" -gt '1' && "${i}" -eq "${numberOfLines}" ]]
+                then
+                    table="${table}$(printf '%s#+' "$(repeatString '#+' "${numberOfColumns}")")"
+                fi
+            done
+
+            if [[ "$(isEmptyString "${table}")" = 'false' ]]
+            then
+                # echo -e "${table}" | column -s '#' -t | awk '/^\+/{gsub(" ", "-", $0)}1'
+                echo -e "${table}" | column -s '#' -t | awk '/\+/{gsub(" ", "-", $0)}1'
+            fi
+        fi
+    fi
+}
+
+function removeEmptyLines()
+{
+    local -r content="${1}"
+
+    echo -e "${content}" | sed '/^\s*$/d'
+}
+
+function repeatString()
+{
+    local -r string="${1}"
+    local -r numberToRepeat="${2}"
+
+    if [[ "${string}" != '' && "${numberToRepeat}" =~ ^[1-9][0-9]*$ ]]
+    then
+        local -r result="$(printf "%${numberToRepeat}s")"
+        echo -e "${result// /${string}}"
+    fi
+}
+
+function isEmptyString()
+{
+    local -r string="${1}"
+
+    if [[ "$(trimString "${string}")" = '' ]]
+    then
+        echo 'true' && return 0
+    fi
+
+    echo 'false' && return 1
+}
+
+function trimString()
+{
+    local -r string="${1}"
+
+    sed 's,^[[:blank:]]*,,' <<< "${string}" | sed 's,[[:blank:]]*$,,'
+}
+
+# No args, returns casts object
+getChromecasts () {
+  chromecasts=$(go-chromecast ls);
+  output=$(echo "{}" | jq .);
+  while read -r cast;
+  do
+    device=$(echo "$cast" | grep -Po "device=\"\K[^\"]*");
+    device_name=$(echo "$cast" | grep -Po "device_name=\"\K[^\"]*");
+    uuid=$(echo "$cast" | grep -Po "uuid=\"\K[^\"]*");
+    output=$(echo "$output" | jq ". + {\"${uuid}\": {\"device\": \"${device}\", \"device_name\": \"${device_name}\", \"playhead\": 0, \"videoid\": \"\", \"segmentsid\": \"\", \"segments\": []}}")
+  done < <(printf '%s\n' "$chromecasts");
+  echo "$output";
+}
+
+castsObjectToArray () {
+  echo $1 | jq -c 'to_entries | .[] | .value += {"uuid": .key} | .value';
+}
+castObjectToHash () {
+  echo "$1" | jq -c '{(.uuid): (. | del(.uuid)) }';
+}
+
+# $1 cast object with uuid
+watchIngest () {
+  while read -r update;
+  do
+    if echo "$update" | grep -Eq "x\-youtube\/video"; then
+      videoid=$(echo "$update" | grep -Po "contentId\":\"\K[^\"]+");
+      echo $1 | jq -c "{\"uuid\": .uuid, videoid: \"${videoid}\"}";
+    fi
+  done;
+}
+
+statusIngest () {
+  uuid=$(echo "$1" | jq -r '.uuid');
+  while true;
+  do
+    result=$(go-chromecast status -u "$uuid");
+    if echo "$result" | grep -Eq "time remaining=[0-9]+s\/[0-9]+s"; then
+      playhead=$(echo "$result" | grep -Po "time remaining=\K[0-9]+(?=s\/[0-9]+s)");
+      echo $1 | jq -c "{\"uuid\": .uuid, \"playhead\": \"$playhead\"}"
+    fi
+    sleep 0.5;
+  done;
+}
+
+# $1 chromecasts object
+watchLoop () {
+  casts=$(castsObjectToArray "$1");
+  while read -r cast;
+  do
+    uuid=$(echo "$cast" | jq -r '.uuid');
+    go-chromecast watch -u "$uuid" | watchIngest "$cast" > "/tmp/castblock-updates" &
+  done < <(printf '%s\n' "$casts");
+}
+
+statusLoop () {
+  casts=$(castsObjectToArray "$1");
+  while read -r cast;
+  do
+    statusIngest "$cast" > "/tmp/castblock-updates" &
+  done < <(printf '%s\n' "$casts");
+}
+
+# $1 initialstate
+stateLoop () {
+  chromecasts=$1;
+  while read -r update;
+  do
+    update=$(castObjectToHash "$update");
+    chromecasts=$(echo "$chromecasts$update" | jq --slurp -c 'reduce .[] as $item ({}; . * $item)');
+    echo "$chromecasts" >> "/tmp/castblock-state";
+  done < <(cat /tmp/castblock-updates);
+}
+
+sbLoop () {
+  while true;
+  do
+    state=$(tail -n 1 "/tmp/castblock-state");
+    casts=$(castsObjectToArray "$state");
+    while read -r cast;
+    do
+      videoid=$(echo "$cast" | jq -r '.videoid');
+      # Check if video is playing
+      if [ ! -z "$videoid" -a "$videoid" != "null" ]; then
+        # Check if segments loaded
+        segmentsid=$(echo "$cast" | jq -r '.segmentsid');
+        if [ "$videoid" != "$segmentsid" ]; then
+          # Load api
+          segments=$(curl -fs "https://sponsor.ajay.app/api/skipSegments?videoID=$videoid");
+          if [ $? -eq 0 ]; then
+            echo "$cast" | jq -c "{\"uuid\": .uuid, \"segmentsid\": \"$videoid\", \"segments\": $segments}" > "/tmp/castblock-updates";
+          else
+            echo "$cast" | jq -c "{\"uuid\": .uuid, \"segmentsid\": \"$videoid\", \"segments\": []}" > "/tmp/castblock-updates";
+          fi
+        fi
+      fi
+    done < <(printf '%s\n' "$casts");
+    sleep 1;
+  done;
+}
+
+skipLoop () {
+  while true;
+  do
+    state=$(tail -n 1 "/tmp/castblock-state");
+    casts=$(castsObjectToArray "$state");
+    while read -r cast;
+    do
+      videoid=$(echo "$cast" | jq -r '.videoid');
+      segmentsid=$(echo "$cast" | jq -r '.segmentsid');
+      playhead=$(echo "$cast" | jq -r '.playhead');
+      uuid=$(echo "$cast" | jq -r '.uuid');
+      if [ "$videoid" = "$segmentsid" ] && [ "$playhead" -gt 0 ]; then
+        segments=$(echo "$cast" | jq -c '.segments[]');
+        while read -r segment;
+        do
+          start=$(echo "$segment" | jq -r '.segment[0]');
+          end=$(echo "$segment" | jq -r '.segment[1]');
+          if (( $(echo "$playhead > $start" |bc -l) )) && (( $(echo "$playhead < $end" |bc -l) )); then
+            go-chromecast seek $(echo "$end - $playhead - 1" | bc -l | awk '{print int($1)}') -u "$uuid";
+            sleep 5;
+            break 2;
+          fi
+        done < <(printf '%s\n' "$segments");
+      fi
+    done < <(printf '%s\n' "$casts");
+    sleep 0.2;
+  done;
+}
+
+getTableData () {
+  device=$(echo "$1" | jq -r '.device');
+  device_name=$(echo "$1" | jq -r '.device_name');
+  uuid=$(echo "$1" | jq -r '.uuid');
+  playhead=$(echo "$1" | jq -r '.playhead');
+  segments=$(echo "$1" | jq -c '.segments[]');
+
+  printf '%s\n' "$playhead,$device,$device_name";
+  printf '%s\n' "START,END,TYPE";
+
+  while read -r segment; do
+    printf '%s\n' "$(echo "$segment" | jq -r '.segment[0]'),$(echo "$segment" | jq -r '.segment[1]'),$(echo "$segment" | jq -r '.category')";
+  done < <(printf '%s\n' "$segments");
+}
+
+formatTableData () {
+  printf '%s\n' "$2";
+}
+
+# Casts as objects
+chromecasts=$(getChromecasts);
+
+watchLoop "$chromecasts";
+statusLoop "$chromecasts";
+stateLoop "$chromecasts" &
+sbLoop &
+skipLoop &
+
+clear;
+
+while true;
+do
+  state=$(tail -n 1 "/tmp/castblock-state")
+  display="";
+  while read -r cast;
+  do
+    data=$(getTableData "$cast");
+    display+=$(printTable ',' "$(echo -e "$data")")"\n";
+  done < <(printf '%s\n' "$state" | jq -c '.[]');
+  echo -e "\033[0;0f";
+  echo -e "$display";
+done;
+
+wait;
