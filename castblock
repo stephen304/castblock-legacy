@@ -132,17 +132,6 @@ castObjectToHash () {
   echo "$1" | jq -c '{(.uuid): (. | del(.uuid)) }';
 }
 
-# $1 cast object with uuid
-watchIngest () {
-  while read -r update;
-  do
-    if echo "$update" | grep -Eq "x\-youtube\/video"; then
-      videoid=$(echo "$update" | grep -Po "contentId\":\"\K[^\"]+");
-      echo $1 | jq -c "{\"uuid\": .uuid, videoid: \"${videoid}\"}";
-    fi
-  done;
-}
-
 statusIngest () {
   uuid=$(echo "$1" | jq -r '.uuid');
   while true;
@@ -152,18 +141,13 @@ statusIngest () {
       playhead=$(echo "$result" | grep -Po "time remaining=\K[0-9]+(?=s\/[0-9]+s)");
       echo $1 | jq -c "{\"uuid\": .uuid, \"playhead\": \"$playhead\"}"
     fi
-    sleep 0.5;
-  done;
-}
 
-# $1 chromecasts object
-watchLoop () {
-  casts=$(castsObjectToArray "$1");
-  while read -r cast;
-  do
-    uuid=$(echo "$cast" | jq -r '.uuid');
-    go-chromecast watch -u "$uuid" | watchIngest "$cast" > "/tmp/castblock-updates" &
-  done < <(printf '%s\n' "$casts");
+    if echo "$result" | grep -Pq "\[\K[^\]]{11}(?=\])"; then
+      videoid=$(echo "$result" | grep -Po "\[\K[^\]]{11}(?=\])");
+      echo $1 | jq -c "{\"uuid\": .uuid, \"videoid\": \"$videoid\"}";
+    fi
+    sleep 0.1;
+  done;
 }
 
 statusLoop () {
@@ -229,15 +213,15 @@ skipLoop () {
         do
           start=$(echo "$segment" | jq -r '.segment[0]');
           end=$(echo "$segment" | jq -r '.segment[1]');
-          if (( $(echo "$playhead > $start" |bc -l) )) && (( $(echo "$playhead < $end" |bc -l) )); then
-            go-chromecast seek $(echo "$end - $playhead - 1" | bc -l | awk '{print int($1)}') -u "$uuid";
-            sleep 5;
+          if [ ! -z $start ] && [ ! -z $end ] && (( $(echo "$playhead > $start" | bc -l) )) && (( $(echo "$playhead < $end" | bc -l) )) && (( $(echo "$end - $start > 5" | bc -l) )); then
+            go-chromecast seek-to $(echo "$end") -u "$uuid";
+            sleep 10;
             break 2;
           fi
         done < <(printf '%s\n' "$segments");
       fi
     done < <(printf '%s\n' "$casts");
-    sleep 0.2;
+    sleep 0.1;
   done;
 }
 
@@ -264,7 +248,6 @@ formatTableData () {
 chromecasts=$(getChromecasts);
 echo "$chromecasts" >> "/tmp/castblock-state";
 
-watchLoop "$chromecasts";
 statusLoop "$chromecasts";
 stateLoop "$chromecasts" &
 sbLoop &
@@ -277,14 +260,19 @@ trap 'cleanup' SIGINT;
 while true;
 do
   state=$(tail -n 1 "/tmp/castblock-state")
-  display="";
-  while read -r cast;
-  do
-    data=$(getTableData "$cast");
-    display+=$(printTable ',' "$(echo -e "$data")")"\n";
-  done < <(printf '%s\n' "$state" | jq -c '.[]');
-  echo -e "\033[0;0f";
-  echo -e "$display";
+
+  if ! (cmp -s <(echo "$state" | jq -cS '.') <(echo "$prevState" | jq -cS '.')); then
+    display="";
+    while read -r cast;
+    do
+      data=$(getTableData "$cast");
+      display+=$(printTable ',' "$(echo -e "$data")")"\n";
+    done < <(printf '%s\n' "$state" | jq -c '.[]');
+    echo -e "\033[0;0f";
+    echo -e "$display";
+  fi
+
+  prevState=$state;
 done;
 
 wait;
