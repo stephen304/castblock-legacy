@@ -7,6 +7,7 @@ Install the prerequisites:
 * jq
 * bc
 * cmp
+* timeout
 
 Run `castblock`. It should automatically detect all chromecasts on the LAN, keep track of what's playing, and automatically skip sponsors using the SponsorBlock API.
 

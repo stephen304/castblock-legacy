@@ -136,7 +136,7 @@ statusIngest () {
   uuid=$(echo "$1" | jq -r '.uuid');
   while true;
   do
-    result=$(go-chromecast status -u "$uuid");
+    result=$(timeout 10s go-chromecast status -u "$uuid");
     if echo "$result" | grep -Eq "time remaining=[0-9]+s\/[0-9]+s"; then
       playhead=$(echo "$result" | grep -Po "time remaining=\K[0-9]+(?=s\/[0-9]+s)");
       echo $1 | jq -c "{\"uuid\": .uuid, \"playhead\": \"$playhead\"}"
