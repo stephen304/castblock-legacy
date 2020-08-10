@@ -4,3 +4,6 @@ After=network.target
 
 [Service]
 ExecStart=/usr/bin/castblock
+
+[Install]
+WantedBy=multi-user.target
