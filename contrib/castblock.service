@@ -1,0 +1,6 @@
+[Unit]
+Description=CastBlock Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/castblock
