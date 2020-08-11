@@ -1,15 +1,28 @@
-# Castblock
+# CastBlock
 A small utility to skip integrated ads on youtube when played on chromecasts
 
-## Usage
-Install the prerequisites:
-* [go-chromecast](https://github.com/vishen/go-chromecast)
-* jq
-* bc
-* cmp
-* timeout
+## Installation
+From the AUR:
+```
+aurman -S castblock-git
+```
 
-Run `castblock`. It should automatically detect all chromecasts on the LAN, keep track of what's playing, and automatically skip sponsors using the SponsorBlock API.
+From source:
+* Install the prerequisites:
+  * [go-chromecast](https://github.com/vishen/go-chromecast)
+  * jq
+  * bc
+  * cmp
+  * timeout
+* Put `castblock` in `/usr/bin/`
+* Put `castblock.service` in `/usr/lib/systemd/system/`
+
+## Usage
+Run `castblock` while on the same LAN as chromecast devices.
+
+Alternatively, enable and start `castblock.service` to run in the background.
+
+It should automatically detect all chromecasts on the LAN, keep track of what's playing, and automatically skip sponsors using the SponsorBlock API.
 
 ## Known Issues
 - [ ] May not detect all chromecasts, does not rescan. If your chromecast is now shown, try re-running
