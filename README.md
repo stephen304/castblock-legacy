@@ -29,7 +29,7 @@ It should automatically detect all chromecasts on the LAN, keep track of what's 
 - [ ] Start of skipping is based on polling and may miss the starting split second of a segment
 - [ ] Segments shorter than 5 seconds are ignored - seeking on chromecast always causes buffering making skipping super short segments have questionable value
 - [ ] Segments less than 10 seconds after a previous segment may play partially or fully due to the post skip timeout which prevents double skipping
-- [ ] Script may not cleanly exit / may leave running threads/processes.
+- [ ] Script may not cleanly exit / may leave running threads/processes. Fight me. Or make a pull request. Your choice.
 
 ## Contributing
 I welcome all suggestions / code for the above issues as well as other discussion on how to improve the script. Feel free to open an issue or PR with any contributions.
