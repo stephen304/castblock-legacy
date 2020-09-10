@@ -7,6 +7,12 @@ From the AUR:
 aurman -S castblock-git
 ```
 
+With Docker:
+```
+docker pull stephen304/castblock:latest
+docker run --network="host" stephen304/castblock
+```
+
 From source:
 * Install the prerequisites:
   * [go-chromecast](https://github.com/vishen/go-chromecast)
