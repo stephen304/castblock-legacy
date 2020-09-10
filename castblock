@@ -165,7 +165,7 @@ stateLoop () {
   do
     update=$(castObjectToHash "$update");
     chromecasts=$(echo "$chromecasts$update" | jq --slurp -c 'reduce .[] as $item ({}; . * $item)');
-    echo "$chromecasts" >> "/tmp/castblock-state";
+    echo "$chromecasts" > "/tmp/castblock-state";
   done < <(cat /tmp/castblock-updates);
 }
 
@@ -246,7 +246,7 @@ formatTableData () {
 
 # Casts as objects
 chromecasts=$(getChromecasts);
-echo "$chromecasts" >> "/tmp/castblock-state";
+echo "$chromecasts" > "/tmp/castblock-state";
 
 statusLoop "$chromecasts";
 stateLoop "$chromecasts" &
