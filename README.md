@@ -16,8 +16,8 @@ docker run --network="host" stephen304/castblock
 From source:
 * Install the prerequisites:
   * [go-chromecast](https://github.com/vishen/go-chromecast)
-  * jq
-  * bc
+  * jq - `sudo apt-get install jq`
+  * bc - `sudo apt-get install bc`
   * cmp
   * timeout
 * Put `castblock` in `/usr/bin/`
@@ -27,6 +27,10 @@ From source:
 Run `castblock` while on the same LAN as chromecast devices.
 
 Alternatively, enable and start `castblock.service` to run in the background.
+Ensure `castblock` exists in `/usr/bin/` and `castblock.service` exists in `/usr/lib/systemd/system/` as above, then run:
+1. `sudo systemctl start castblock`
+1. Check the service has started by running `sudo systemctl status castblock`
+1. And finally, in order to run at boot, type `sudo systemctl enable castblock`
 
 It should automatically detect all chromecasts on the LAN, keep track of what's playing, and automatically skip sponsors using the SponsorBlock API.
 
