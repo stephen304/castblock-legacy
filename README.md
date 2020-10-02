@@ -47,12 +47,12 @@ It should automatically detect all chromecasts on the LAN, keep track of what's 
   - If you have your chromecast off except when you need it use something like this:
 
 ```bash
+killall -q castblock # kill all currently open castblock instances
 while true; do
-    castblock &
-    sleep 300
-    killall -q castblock && sleep 10
+    castblock & # run castblock in the background
+    sleep 300 # keep it running for 5 minutes
+    killall -q castblock && sleep 1 # kill all castblock instances and wait a second before restarting
 done
-killall -q castblock
 ```
 
 - [ ] Start of skipping is based on polling and may miss the starting split second of a segment
