@@ -36,6 +36,15 @@ It should automatically detect all chromecasts on the LAN, keep track of what's 
 
 ## Known Issues
 - [ ] May not detect all chromecasts, does not rescan. If your chromecast is now shown, try re-running
+   - If you have your chromecast off except when you need it use something like this:
+```bash
+while true; do
+    castblock &
+    sleep 300
+    killall -q castblock && sleep 10
+done
+killall -q castblock
+```
 - [ ] Start of skipping is based on polling and may miss the starting split second of a segment
 - [ ] Segments shorter than 5 seconds are ignored - seeking on chromecast always causes buffering making skipping super short segments have questionable value
 - [ ] Segments less than 10 seconds after a previous segment may play partially or fully due to the post skip timeout which prevents double skipping
