@@ -2,18 +2,24 @@
 A small utility to skip integrated ads on youtube when played on chromecasts
 
 ## Installation
-From the AUR:
+
+### Arch Linux
+
 ```
 aurman -S castblock-git
 ```
 
-With Docker:
+### Any Distro via Docker
+
+x86 and ARM Docker images are available from DockerHub as `stephen304/castblock:latest`
+
 ```
 docker pull stephen304/castblock:latest
 docker run --network="host" stephen304/castblock
 ```
 
-From source:
+### From Source
+
 * Install the prerequisites:
   * [go-chromecast](https://github.com/vishen/go-chromecast)
   * jq - `sudo apt-get install jq`
@@ -35,6 +41,7 @@ Ensure `castblock` exists in `/usr/bin/` and `castblock.service` exists in `/usr
 It should automatically detect all chromecasts on the LAN, keep track of what's playing, and automatically skip sponsors using the SponsorBlock API.
 
 ## Known Issues
+- [ ] May not work with smart TV youtube apps that support cast - dedicated chromecast device required
 - [ ] May not detect all chromecasts, does not rescan. If your chromecast is now shown, try re-running
 - [ ] Start of skipping is based on polling and may miss the starting split second of a segment
 - [ ] Segments shorter than 5 seconds are ignored - seeking on chromecast always causes buffering making skipping super short segments have questionable value
