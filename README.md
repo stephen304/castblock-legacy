@@ -1,3 +1,10 @@
+| :warning: Notice           | |
+|:---------------------------|-|
+| This project has been deprecated in favor of numerous forks      | |
+| https://github.com/erdnaxeli/castblock | Easiest upgrade due to Dockerfile |
+| https://github.com/willemstuursma/castblock-php | PHP port |
+| https://github.com/chromecast-sponsorblock/chromecast-sponsorblock | |
+
 # CastBlock
 A small utility to skip integrated ads on youtube when played on chromecasts
 
